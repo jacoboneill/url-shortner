@@ -1,3 +1,11 @@
+FROM sqlc/sqlc AS sqlc
+WORKDIR /src
+
+COPY ./sqlc.yaml .
+COPY ./internal/db ./internal/db
+
+RUN ["/workspace/sqlc", "generate"]
+
 FROM golang:1.26.3-alpine AS build
 WORKDIR /src
 

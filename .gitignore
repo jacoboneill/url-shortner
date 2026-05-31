@@ -1,1 +1,3 @@
 data/
+internal/db/*.go
+!internal/db/schema.go
