@@ -13,6 +13,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{ext}", handlers.RedirectHandler)
+	mux.HandleFunc("POST /new-url", handlers.NewURLHandler)
 
 	slog.Info("starting server", "port", port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), mux); err != nil {
