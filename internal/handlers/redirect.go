@@ -1,29 +1,29 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 )
 
-var db = map[string]string{
-	"g": "https://www.google.com",
-}
+var ErrTokenNotFound = errors.New("extension not found")
 
-var ErrExtensionNotFound = fmt.Errorf("extension not found")
-
-func RedirectController(ext string) (string, error) {
-	if url, ok := db[ext]; !ok {
-		slog.Warn(ErrExtensionNotFound.Error(), "ext", ext)
-		return "", ErrExtensionNotFound
-	} else {
-		return url, nil
+func RedirectController(ctx context.Context, token string) (string, error) {
+	url, err := Queries.GetURL(ctx, token)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("%w: %w", ErrTokenNotFound, err)
+		}
+		return "", err
 	}
+	return url, nil
 }
 
 func RedirectHandler(w http.ResponseWriter, r *http.Request) {
-	url, err := RedirectController(r.PathValue("ext"))
-
+	url, err := RedirectController(r.Context(), r.PathValue("token"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 	} else {

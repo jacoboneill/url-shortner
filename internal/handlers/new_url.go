@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,8 @@ import (
 	"log/slog"
 	"math/big"
 	"net/http"
+
+	"github.com/jacoboneill/url-shortner/internal/db"
 )
 
 type NewURLRequest struct {
@@ -18,7 +21,10 @@ type NewURLResponse struct {
 	URLToken string `json:"url_token"`
 }
 
-var ErrURLConflict = fmt.Errorf("url already exists")
+var (
+	ErrURLConflict           = errors.New("url already exists")
+	ErrUniqueTokenGeneration = errors.New("failed to generate unique token")
+)
 
 func generateToken() (string, error) {
 	const (
@@ -37,23 +43,33 @@ func generateToken() (string, error) {
 	return string(token), nil
 }
 
-func NewURLController(url string) (string, error) {
-	// Generate unique token
-	var token string
+func generateUniqueToken(ctx context.Context) (string, error) {
 	for {
-		generatedToken, err := generateToken()
+		token, err := generateToken()
 		if err != nil {
-			slog.Error("error in generating new token", "error", err)
 			return "", err
 		}
-		if _, ok := db[generatedToken]; !ok {
-			token = generatedToken
-			break
+		existsInt, err := Queries.TokenExists(ctx, token)
+		if err != nil {
+			return "", err
+		}
+		if exists := existsInt != 0; !exists {
+			return token, nil
 		}
 	}
+}
 
+func NewURLController(ctx context.Context, url string) (string, error) {
 	// Store in DB
-	db[token] = url
+	token, err := generateUniqueToken(ctx)
+	if err != nil {
+		return "", fmt.Errorf("%w, %w", ErrUniqueTokenGeneration)
+	}
+
+	Queries.CreateURL(ctx, db.CreateURLParams{
+		Token: token,
+		Url:   url,
+	})
 	return token, nil
 }
 
@@ -74,14 +90,18 @@ func NewURLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get new token
-	urlToken, err := NewURLController(payload.URL)
+	urlToken, err := NewURLController(r.Context(), payload.URL)
 	if err != nil {
 		if errors.Is(err, ErrURLConflict) {
 			slog.Warn("user attempted to create redirect with already existing URL", "url", payload.URL)
-			http.Error(w, "url already exists", http.StatusConflict)
+			http.Error(w, "bad request", http.StatusConflict)
 		} else {
-			slog.Error("an error occured when creating a new URL", "error", err)
-			http.Error(w, "the server encountered an error", http.StatusInternalServerError)
+			if errors.Is(err, ErrUniqueTokenGeneration) {
+				slog.Error("server failed to generate a unique token", "error", err)
+			} else {
+				slog.Error("an unknown error occured when creating a new URL", "error", err)
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}
 		return
 	}
@@ -90,7 +110,7 @@ func NewURLHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(NewURLResponse{URLToken: urlToken}); err != nil {
 		slog.Error("server failed to encode JSON body", "error", err)
-		http.Error(w, "the server encountered an error", http.StatusInternalServerError)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 	} else {
 		slog.Info("new url created", "url", payload.URL, "token", urlToken)
 	}
