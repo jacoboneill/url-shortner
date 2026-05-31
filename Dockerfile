@@ -13,7 +13,10 @@ COPY go.mod .
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -o /bin/server ./cmd/server
+COPY --from=sqlc /src/*.go ./internal/db 
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -o /bin/server ./cmd/server
 
 FROM scratch
 COPY --from=build /bin/server /bin/url_shortner
