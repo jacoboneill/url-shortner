@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS urls (
   token TEXT PRIMARY KEY,
-  url TEXT UNIQUE NOT NULL
+  url TEXT NOT NULL,
+  title TEXT
 );
 
 CREATE TABLE IF NOT EXISTS timestamps (

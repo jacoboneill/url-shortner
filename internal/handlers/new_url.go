@@ -14,7 +14,8 @@ import (
 )
 
 type NewURLRequest struct {
-	URL string `json:"url"`
+	URL   string  `json:"url"`
+	Title *string `json:"title"`
 }
 
 type NewURLResponse struct {
@@ -59,17 +60,22 @@ func generateUniqueToken(ctx context.Context) (string, error) {
 	}
 }
 
-func NewURLController(ctx context.Context, url string) (string, error) {
+func NewURLController(ctx context.Context, url string, title *string) (string, error) {
 	// Store in DB
 	token, err := generateUniqueToken(ctx)
 	if err != nil {
 		return "", fmt.Errorf("%w, %w", ErrUniqueTokenGeneration, err)
 	}
 
-	Queries.CreateURL(ctx, db.CreateURLParams{
+	createURLParams := db.CreateURLParams{
 		Token: token,
 		Url:   url,
-	})
+	}
+	if title != nil {
+		createURLParams.Title = *title
+	}
+
+	Queries.CreateURL(ctx, createURLParams)
 	return token, nil
 }
 
@@ -90,7 +96,7 @@ func NewURLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get new token
-	urlToken, err := NewURLController(r.Context(), payload.URL)
+	urlToken, err := NewURLController(r.Context(), payload.URL, payload.Title)
 	if err != nil {
 		if errors.Is(err, ErrURLConflict) {
 			slog.Warn("user attempted to create redirect with already existing URL", "url", payload.URL)
