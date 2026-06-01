@@ -75,7 +75,10 @@ func NewURLController(ctx context.Context, url string, title *string) (string, e
 		createURLParams.Title = *title
 	}
 
-	Queries.CreateURL(ctx, createURLParams)
+	if err := Queries.CreateURL(ctx, createURLParams); err != nil {
+		return "", err
+	}
+
 	return token, nil
 }
 

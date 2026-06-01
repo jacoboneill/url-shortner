@@ -29,7 +29,11 @@ func RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	} else {
 		slog.Info("user redirected", "url", url)
-		Queries.AddTimestamp(r.Context(), token)
+		if err := Queries.AddTimestamp(r.Context(), token); err != nil {
+			slog.Error("server failed to save timestamp", "error", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
 		http.Redirect(w, r, url, http.StatusFound)
 	}
 }
