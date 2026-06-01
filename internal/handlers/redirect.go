@@ -23,11 +23,13 @@ func RedirectController(ctx context.Context, token string) (string, error) {
 }
 
 func RedirectHandler(w http.ResponseWriter, r *http.Request) {
-	url, err := RedirectController(r.Context(), r.PathValue("token"))
+	token := r.PathValue("token")
+	url, err := RedirectController(r.Context(), token)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 	} else {
 		slog.Info("user redirected", "url", url)
+		Queries.AddTimestamp(r.Context(), token)
 		http.Redirect(w, r, url, http.StatusFound)
 	}
 }
