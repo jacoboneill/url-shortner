@@ -63,7 +63,7 @@ func NewURLController(ctx context.Context, url string) (string, error) {
 	// Store in DB
 	token, err := generateUniqueToken(ctx)
 	if err != nil {
-		return "", fmt.Errorf("%w, %w", ErrUniqueTokenGeneration)
+		return "", fmt.Errorf("%w, %w", ErrUniqueTokenGeneration, err)
 	}
 
 	Queries.CreateURL(ctx, db.CreateURLParams{
