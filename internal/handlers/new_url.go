@@ -9,12 +9,13 @@ import (
 	"log/slog"
 	"math/big"
 	"net/http"
+	"net/url"
 
 	"github.com/jacoboneill/url-shortner/internal/db"
 )
 
 type NewURLRequest struct {
-	URL   string  `json:"url"`
+	URL   *string `json:"url"`
 	Title *string `json:"title"`
 }
 
@@ -24,6 +25,8 @@ type NewURLResponse struct {
 
 var (
 	ErrUniqueTokenGeneration = errors.New("failed to generate unique token")
+	ErrInvalidURL            = errors.New("URL missing from request body")
+	ErrInvalidURLScheme      = errors.New("invalid url scheme")
 )
 
 func generateToken() (string, error) {
@@ -81,6 +84,21 @@ func NewURLController(ctx context.Context, url string, title *string) (string, e
 	return token, nil
 }
 
+func validateURL(URL *string) (string, error) {
+	if URL == nil {
+		return "", ErrInvalidURL
+	}
+
+	u, err := url.ParseRequestURI(*URL)
+	if err != nil {
+		return *URL, err
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", ErrInvalidURLScheme
+	}
+	return u.String(), nil
+}
+
 func NewURLHandler(w http.ResponseWriter, r *http.Request) {
 	// Check content type
 	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
@@ -97,8 +115,21 @@ func NewURLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate URL
+	URL, err := validateURL(payload.URL)
+	if err != nil {
+		if errors.Is(err, ErrInvalidURL) {
+			slog.Warn("user attempted to request with no URL")
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+		} else {
+			slog.Warn("user attempted to request with bad URL", "url", URL, "error", err)
+			http.Error(w, "invalid URL", http.StatusBadRequest)
+		}
+		return
+	}
+
 	// Get new token
-	urlToken, err := NewURLController(r.Context(), payload.URL, payload.Title)
+	urlToken, err := NewURLController(r.Context(), URL, payload.Title)
 	if err != nil {
 		if errors.Is(err, ErrUniqueTokenGeneration) {
 			slog.Error("server failed to generate a unique token", "error", err)
@@ -115,6 +146,6 @@ func NewURLHandler(w http.ResponseWriter, r *http.Request) {
 		slog.Error("server failed to encode JSON body", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	} else {
-		slog.Info("new url created", "url", payload.URL, "token", urlToken)
+		slog.Info("new url created", "url", URL, "token", urlToken)
 	}
 }
