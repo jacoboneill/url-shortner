@@ -23,7 +23,6 @@ type NewURLResponse struct {
 }
 
 var (
-	ErrURLConflict           = errors.New("url already exists")
 	ErrUniqueTokenGeneration = errors.New("failed to generate unique token")
 )
 
@@ -101,17 +100,12 @@ func NewURLHandler(w http.ResponseWriter, r *http.Request) {
 	// Get new token
 	urlToken, err := NewURLController(r.Context(), payload.URL, payload.Title)
 	if err != nil {
-		if errors.Is(err, ErrURLConflict) {
-			slog.Warn("user attempted to create redirect with already existing URL", "url", payload.URL)
-			http.Error(w, "bad request", http.StatusConflict)
+		if errors.Is(err, ErrUniqueTokenGeneration) {
+			slog.Error("server failed to generate a unique token", "error", err)
 		} else {
-			if errors.Is(err, ErrUniqueTokenGeneration) {
-				slog.Error("server failed to generate a unique token", "error", err)
-			} else {
-				slog.Error("an unknown error occured when creating a new URL", "error", err)
-			}
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			slog.Error("an unknown error occured when creating a new URL", "error", err)
 		}
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
