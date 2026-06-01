@@ -1,8 +1,11 @@
 APP=url_shortner
 
-.PHONY: run build clean
+.PHONY: lint build run clean
 
-build:
+lint:
+	golangci-lint run ./...
+
+build: lint
 	docker build -t $(APP) .
 
 run: build
